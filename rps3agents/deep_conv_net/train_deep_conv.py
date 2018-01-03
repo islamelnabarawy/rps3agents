@@ -13,7 +13,7 @@ NUM_ACTIONS = 28 * 28
 LEARN_RATE = 0.001
 DECAY_RATE = 0.95
 
-NUM_EPISODES = 100
+NUM_EPISODES = 10000
 
 
 def deep_conv_net(input_layer):
@@ -75,7 +75,7 @@ def main():
         train_op = optimizer.minimize(loss=loss_fn, global_step=tf.train.get_global_step())
 
     episode_rewards = tf.placeholder(tf.float32, (None, 1), name='episode_rewards')
-    tf.summary.scalar('mean_episode_reward', tf.reduce_mean(episode_rewards))
+    tf.summary.scalar('mean_episode_reward', tf.reduce_mean(episode_rewards[-100:]))
     tf.summary.scalar('last_episode_reward', episode_rewards[-1, 0])
     tf.summary.histogram('episode_reward_values', episode_rewards)
 
