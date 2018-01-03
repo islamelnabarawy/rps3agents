@@ -62,28 +62,37 @@ def main():
     expected_output = tf.placeholder(tf.float32, [None, NUM_ACTIONS], name='expected_output')
     available_actions = tf.placeholder(tf.float32, [None, NUM_ACTIONS], name='available_actions')
 
+    train_summary_ops = []
+    reward_summary_ops = []
+
     with tf.name_scope("deep_conv_net"):
         nn_output = deep_conv_net(state_input)
-        # tf.summary.histogram('nn_output', nn_output)
+
+        train_summary_ops.append(tf.summary.histogram('nn_output', nn_output))
+
         filtered_output = tf.multiply(nn_output, available_actions, name='filtered_output')
 
         best_action = tf.argmax(filtered_output, axis=1, name='best_action')
 
         loss_fn = tf.losses.mean_squared_error(expected_output, nn_output)
+
+        train_summary_ops.append(tf.summary.histogram('loss_fn', loss_fn))
+
         optimizer = tf.train.GradientDescentOptimizer(learning_rate=LEARN_RATE)
         train_op = optimizer.minimize(loss=loss_fn, global_step=tf.train.get_global_step())
 
     episode_rewards = tf.placeholder(tf.float32, (None, 1), name='episode_rewards')
-    tf.summary.scalar('mean_episode_reward', tf.reduce_mean(episode_rewards[-100:]))
-    tf.summary.scalar('last_episode_reward', episode_rewards[-1, 0])
-    tf.summary.histogram('episode_reward_values', episode_rewards)
+    reward_summary_ops.append(tf.summary.scalar('mean_episode_reward', tf.reduce_mean(episode_rewards[-100:])))
+    reward_summary_ops.append(tf.summary.scalar('last_episode_reward', episode_rewards[-1, 0]))
+    reward_summary_ops.append(tf.summary.histogram('episode_reward_values', episode_rewards))
 
     # output graph for tensorboard
     summary_writer = tf.summary.FileWriter('graph')
     summary_writer.add_graph(tf.get_default_graph())
 
     # merge summary operators
-    merged_summaries = tf.summary.merge_all()
+    train_summaries = tf.summary.merge(train_summary_ops)
+    reward_summaries = tf.summary.merge(reward_summary_ops)
 
     # create model saver
     saver = tf.train.Saver()
@@ -138,10 +147,11 @@ def main():
                 target_q_values = q_values
                 target_q_values[0, a_best[0]] = move_reward + DECAY_RATE * np.max(new_q_values)
 
-                _ = sess.run(train_op, feed_dict={
+                _, summary = sess.run([train_op, train_summaries], feed_dict={
                     state_input: np.array([obs_extracted]),
-                    expected_output: target_q_values
+                    expected_output: target_q_values,
                 })
+                summary_writer.add_summary(summary, i)
 
             # env.render()
             print('Finished episode {} with total reward {}'.format(i, total_episode_reward))
@@ -151,7 +161,7 @@ def main():
             # reduce exploration probability gradually
             exploration_prob = 1. / ((i / 50) + 10)
 
-            summary = sess.run(merged_summaries, feed_dict={
+            summary = sess.run(reward_summaries, feed_dict={
                 episode_rewards: np.array(episode_reward_values).reshape((-1, 1))
             })
             summary_writer.add_summary(summary, i)
