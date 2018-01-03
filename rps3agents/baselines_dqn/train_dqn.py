@@ -18,7 +18,7 @@ import gym
 import rps3env
 from baselines import deepq
 
-from rps3agents.dqn.wrapper import DQNEnvWrapper
+from rps3agents.baselines_dqn.wrapper import DQNEnvWrapper
 
 __author__ = "Islam Elnabarawy"
 
