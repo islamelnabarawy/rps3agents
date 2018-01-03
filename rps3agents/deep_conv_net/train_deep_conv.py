@@ -1,6 +1,5 @@
 import random
 
-import matplotlib.pyplot as plt
 import gym
 import numpy as np
 # noinspection PyUnresolvedReferences
@@ -13,7 +12,7 @@ NUM_ACTIONS = 28 * 28
 LEARN_RATE = 0.001
 DECAY_RATE = 0.95
 
-NUM_EPISODES = 10000
+NUM_EPISODES = 100
 
 
 def deep_conv_net(input_layer):
@@ -86,16 +85,27 @@ def main():
     # merge summary operators
     merged_summaries = tf.summary.merge_all()
 
+    # create model saver
+    saver = tf.train.Saver()
+
     # create environment
     env = gym.make('RPS3Game-v0')
 
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        checkpoint = tf.train.latest_checkpoint("models")
 
-        exploration_prob = 0.1
+        if checkpoint is not None and len(checkpoint.split('-')) > 1:
+            print("Loading weights from checkpoint: {}".format(checkpoint))
+            saver.restore(sess, checkpoint)
+            start_episode = int(checkpoint.split('-')[-1])
+        else:
+            sess.run(tf.global_variables_initializer())
+            start_episode = 0
+
+        exploration_prob = 1. / ((start_episode / 50) + 10)
         episode_reward_values = []
 
-        for i in range(NUM_EPISODES):
+        for i in range(start_episode, NUM_EPISODES):
             # initialize the environment consistently every time
             env.seed(0)
             env.reset()
@@ -133,7 +143,7 @@ def main():
                     expected_output: target_q_values
                 })
 
-            env.render()
+            # env.render()
             print('Finished episode {} with total reward {}'.format(i, total_episode_reward))
 
             episode_reward_values.append(total_episode_reward)
@@ -146,6 +156,11 @@ def main():
             })
             summary_writer.add_summary(summary, i)
 
+            if i % 10 == 0:
+                # save the variables to disk
+                saver.save(sess, "models/deepconv", global_step=i)
+
+        saver.save(sess, "models/deepconv")
         env.close()
 
 
