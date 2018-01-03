@@ -74,15 +74,17 @@ def main():
         optimizer = tf.train.GradientDescentOptimizer(learning_rate=LEARN_RATE)
         train_op = optimizer.minimize(loss=loss_fn, global_step=tf.train.get_global_step())
 
-    # episode_reward = tf.placeholder(tf.float32, (), name='episode_reward')
-    # tf.summary.scalar('episode_rewards', episode_reward)
+    episode_rewards = tf.placeholder(tf.float32, (None, 1), name='episode_rewards')
+    tf.summary.scalar('mean_episode_reward', tf.reduce_mean(episode_rewards))
+    tf.summary.scalar('last_episode_reward', episode_rewards[-1, 0])
+    tf.summary.histogram('episode_reward_values', episode_rewards)
 
     # output graph for tensorboard
     summary_writer = tf.summary.FileWriter('graph')
     summary_writer.add_graph(tf.get_default_graph())
 
     # merge summary operators
-    # merged_summaries = tf.summary.merge_all()
+    merged_summaries = tf.summary.merge_all()
 
     # create environment
     env = gym.make('RPS3Game-v0')
@@ -91,6 +93,7 @@ def main():
         sess.run(tf.global_variables_initializer())
 
         exploration_prob = 0.1
+        episode_reward_values = []
 
         for i in range(NUM_EPISODES):
             # initialize the environment consistently every time
@@ -101,7 +104,7 @@ def main():
             total_episode_reward = 0
 
             while not done:
-                env.render()
+                # env.render()
                 obs_extracted = get_observation(obs)
 
                 a_best, q_values = sess.run([best_action, filtered_output], feed_dict={
@@ -112,6 +115,8 @@ def main():
                     a_best[0] = np.ravel_multi_index(random.choice(env.available_actions), (28, 28))
 
                 action = np.unravel_index(a_best[0], (28, 28))
+                assert action in env.available_actions
+
                 obs, reward, done, info = env.step(action)
                 move_reward = sum(reward)
                 total_episode_reward += move_reward
@@ -131,13 +136,15 @@ def main():
             env.render()
             print('Finished episode {} with total reward {}'.format(i, total_episode_reward))
 
+            episode_reward_values.append(total_episode_reward)
+
             # reduce exploration probability gradually
             exploration_prob = 1. / ((i / 50) + 10)
 
-            # summary = sess.run(merged_summaries, feed_dict={
-            #     # episode_reward: np.array([total_episode_reward])
-            # })
-            # summary_writer.add_summary(summary, i)
+            summary = sess.run(merged_summaries, feed_dict={
+                episode_rewards: np.array(episode_reward_values).reshape((-1, 1))
+            })
+            summary_writer.add_summary(summary, i)
 
         env.close()
 
